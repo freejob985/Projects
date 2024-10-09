@@ -67,6 +67,17 @@ try {
     $sqlDeleteDatabase = "DROP DATABASE IF EXISTS   $dbs";
     $conn->exec($sqlDeleteDatabase);
 
+    // استعلام لاسترداد المسار قبل حذف السجل
+    $stmt = $conn->prepare("SELECT path FROM site_name WHERE id = :id");
+    $stmt->bindParam(':id', $record_id);
+    $stmt->execute();
+    $path = $stmt->fetchColumn();
+
+    // بعد حذف السجل من قاعدة البيانات
+    if (!empty($path) && file_exists($path)) {
+        deleteFolder($path);
+    }
+
     header("Location: http://localhost/wordpress.php");
 } catch (PDOException $e) {
     echo "Failed to connect to the database: " . $e->getMessage();
