@@ -113,7 +113,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         // استيراد قاعدة البيانات
         $pdo->exec("USE `$dbName`");
-        $sqlFile = 'D:/server/htdocs/Projects/plugins/wordpressx.sql';
+        $sqlFile = 'D:/server/htdocs/Projects/Projects/wordpressx.sql';
         $sql = file_get_contents($sqlFile);
         $pdo->exec($sql);
 
