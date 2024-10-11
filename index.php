@@ -11,14 +11,12 @@
             </div>
         </header>
 
-   <?php include'container.php';?>
-</div>
+        <?php include'container.php';?>
+    </div>
 
-<!-- Footer -->
+    <!-- Footer -->
+    <?php include'footer.php';?>
 
-<?php include'footer.php';?>
-
-
-<?php include'script.php';?>
+    <?php include'script.php';?>
 </body>
 </html>

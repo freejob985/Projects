@@ -143,14 +143,14 @@
                         <div class="row">
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="site-name" class="form-label">Site</label>
-                                    <input type="text" class="form-control" id="site-name" name="site_name">
+                                    <label for="site-name" class="form-label">Site Name</label>
+                                    <input type="text" class="form-control" id="site-name" name="site_name" required>
                                 </div>
                             </div>
                             <div class="col-md-6">
                                 <div class="mb-3">
-                                    <label for="database" class="form-label">Database</label>
-                                    <input type="text" class="form-control" id="database" name="database">
+                                    <label for="database" class="form-label">Database Name</label>
+                                    <input type="text" class="form-control" id="database" name="database" required>
                                 </div>
                             </div>
                         </div>
@@ -158,15 +158,15 @@
                         <div class="row">
                             <div class="col-md-12">
                                 <div class="mb-3">
-                                    <label for="explain_" class="form-label">Explain</label>
-                                    <textarea class="form-control" id="explain_" name="explain_"></textarea>
+                                    <label for="explain_" class="form-label">Description</label>
+                                    <textarea class="form-control" id="explain_" name="explain_" rows="3"></textarea>
                                 </div>
                             </div>
                         </div>
                         
                         <div class="row">
                             <div class="col-md-12">
-                                <button type="button" class="btn btn-primary btn-block" id="submitBtn">Register a new WordPress website</button>
+                                <button type="button" class="btn btn-primary btn-block" id="submitBtn">Create WordPress Site</button>
                             </div>
                         </div>
                     </form>
@@ -176,7 +176,7 @@
                         <div class="spinner-border text-primary" role="status">
                             <span class="visually-hidden">Loading...</span>
                         </div>
-                        <div class="text-primary mt-2">جارٍ التحميل...</div>
+                        <div class="text-primary mt-2">Creating site...</div>
                     </div>
                     
                     <!-- Display response -->
