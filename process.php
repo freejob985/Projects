@@ -23,14 +23,14 @@
  * - MySQL/MariaDB
  *
  * @author Your Name
- * @version 1.1
+ * @version 1.2
  */
 
 // Set PHP settings for better performance and security
 ini_set('display_errors', 'Off');
 ini_set('log_errors', 'On');
-ini_set('error_log', 'D:/server/htdocs/wordpress_creator_error.log');
-ini_set('max_execution_time', 300);
+ini_set('error_log', 'D:/server/htdocs/Projects/wordpress/wordpress_error.log');
+ini_set('max_execution_time', 600); // Increase max execution time to 10 minutes
 
 /**
  * Function to log messages
@@ -39,7 +39,7 @@ ini_set('max_execution_time', 300);
  * @param string $type The type of log message (e.g., 'INFO', 'ERROR')
  */
 function logMessage($message, $type = 'INFO') {
-    $logFile = 'D:/server/htdocs/wordpress_creator.log';
+    $logFile = 'D:/server/htdocs/Projects/wordpress/wordpress_creator.log';
     $timestamp = date('Y-m-d H:i:s');
     $logEntry = "[$timestamp] [$type] $message" . PHP_EOL;
     file_put_contents($logFile, $logEntry, FILE_APPEND);
@@ -70,25 +70,23 @@ function writeToFile($file_path, $content)
  * @param string $source Source folder
  * @param string $destination Destination folder
  */
-function copyFolder($source, $destination)
-{
+function copyFolder($source, $destination) {
     if (!file_exists($destination)) {
         mkdir($destination, 0755, true);
     }
 
-    $dir = opendir($source);
-    while (($file = readdir($dir)) !== false) {
-        if ($file != '.' && $file != '..') {
-            $src = $source . '/' . $file;
-            $dst = $destination . '/' . $file;
-            if (is_dir($src)) {
-                copyFolder($src, $dst);
-            } else {
-                copy($src, $dst);
-            }
+    $iterator = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($source, RecursiveDirectoryIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::SELF_FIRST
+    );
+
+    foreach ($iterator as $item) {
+        if ($item->isDir()) {
+            mkdir($destination . DIRECTORY_SEPARATOR . $iterator->getSubPathName());
+        } else {
+            copy($item, $destination . DIRECTORY_SEPARATOR . $iterator->getSubPathName());
         }
     }
-    closedir($dir);
     logMessage("Folder copied from $source to $destination");
 }
 
@@ -115,16 +113,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $database = $_POST["database"];
     $explain_ = $_POST["explain_"];
 
-    logMessage("Starting WordPress site creation for: $siteName");
-
-    // 1. Copy files from source folder to destination folder
-    $sourceFolder = 'D:/server/htdocs/Projects/Projects/wordpress/';
-    $destinationFolder = 'D:/server/htdocs/Projects/wordpress/' . $siteName;
-
-    copyFolder($sourceFolder, $destinationFolder);
-
     try {
-        // 2. Create the new database
+        logMessage("Starting WordPress site creation for: $siteName");
+        
+        // 1. نسخ الملفات
+        $sourceFolder = 'D:/server/htdocs/Projects/Projects/wordpress/';
+        $destinationFolder = 'D:/server/htdocs/Projects/wordpress/' . $siteName;
+        copyFolder($sourceFolder, $destinationFolder);
+        logMessage("Files copied successfully");
+        
+        // 2. إنشاء قاعدة البيانات
         $dsn = "mysql:host=localhost;";
         $pdo = new PDO($dsn, "root", "");
         $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -133,35 +131,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $sql = "CREATE DATABASE IF NOT EXISTS `$dbName`";
         $pdo->exec($sql);
         logMessage("Database created: $dbName");
-
-        // Import the database
+        
+        // 3. استيراد قاعدة البيانات
         $pdo->exec("USE `$dbName`");
         $sqlFile = 'D:/server/htdocs/Projects/Projects/wordpressx.sql';
-        $sql = file_get_contents($sqlFile);
-        $pdo->exec($sql);
-        logMessage("Database imported from: $sqlFile");
-
-        // 3. Update wp_options table
-        $siteUrl = "http://localhost/Projects/wordpress/" . $siteName;
+        importDatabase($pdo, $sqlFile);
         
-        $updateQueries = [
-            "UPDATE wp_options SET option_value = :value WHERE option_name = 'siteurl'",
-            "UPDATE wp_options SET option_value = :value WHERE option_name = 'home'",
-            "UPDATE wp_options SET option_value = :siteName WHERE option_name = 'blogname'"
-        ];
-
-        foreach ($updateQueries as $query) {
-            $stmt = $pdo->prepare($query);
-            if (strpos($query, 'option_name = \'blogname\'') !== false) {
-                $stmt->bindParam(':siteName', $siteName);
-            } else {
-                $stmt->bindParam(':value', $siteUrl);
-            }
-            $stmt->execute();
-        }
-        logMessage("wp_options table updated");
-
-        // Create wp-config.php file
+        // 4. تحديث wp_options
+        $siteUrl = "http://localhost/Projects/wordpress/" . $siteName;
+        updateWpOptions($pdo, $siteUrl, $siteName);
+        
+        // 5. إنشاء ملف wp-config.php
         $configContent = "<?php
 // ** Database settings - You can get this info from your web host ** //
 /** The name of the database for WordPress */
@@ -217,8 +197,8 @@ require_once ABSPATH . 'wp-settings.php';";
         $wpConfigPath = $destinationFolder . '/wp-config.php';
         file_put_contents($wpConfigPath, $configContent);
         logMessage("wp-config.php created: $wpConfigPath");
-
-        // Add record to site_name table
+        
+        // 6. إضافة سجل إلى جدول site_name
         $stmt = $pdo->prepare("INSERT INTO site_name (site_name, database_, explain_, kind, path, url) VALUES (:siteName, :database, :explain_, 'wordpress', :path, :url)");
         $stmt->execute([
             ':siteName' => $siteName,
@@ -228,13 +208,12 @@ require_once ABSPATH . 'wp-settings.php';";
             ':url' => $siteUrl
         ]);
         logMessage("Record added to site_name table");
-
+        
         echo "Site created successfully. <a href='$siteUrl/wp-admin' target='_blank'>Open admin panel</a>";
         echo "<br>Path: $destinationFolder";
         echo "<br>URL: $siteUrl";
         logMessage("WordPress site creation completed successfully for: $siteName");
-
-    } catch(PDOException $e) {
+    } catch(Exception $e) {
         $errorMessage = "Error creating site: " . $e->getMessage();
         echo $errorMessage;
         logMessage($errorMessage, 'ERROR');
@@ -244,5 +223,56 @@ require_once ABSPATH . 'wp-settings.php';";
 } else {
     echo "Invalid request!";
     logMessage("Invalid request received", 'WARNING');
+}
+
+function importDatabase($pdo, $sqlFile) {
+    $query = '';
+    $sqlScript = file($sqlFile);
+    foreach ($sqlScript as $line) {
+        $startWith = substr(trim($line), 0 ,2);
+        $endWith = substr(trim($line), -1 ,1);
+        
+        if (empty($line) || $startWith == '--' || $startWith == '/*' || $startWith == '//') {
+            continue;
+        }
+            
+        $query = $query . $line;
+        if ($endWith == ';') {
+            $pdo->exec($query);
+            $query= '';
+        }
+    }
+    logMessage("Database imported from: $sqlFile");
+}
+
+function updateWpOptions($pdo, $siteUrl, $siteName) {
+    $updateQueries = [
+        "UPDATE wp_options SET option_value = :value WHERE option_name IN ('siteurl', 'home')",
+        "UPDATE wp_options SET option_value = :siteName WHERE option_name = 'blogname'"
+    ];
+
+    foreach ($updateQueries as $query) {
+        $stmt = $pdo->prepare($query);
+        if (strpos($query, 'option_name = \'blogname\'') !== false) {
+            $stmt->bindParam(':siteName', $siteName);
+        } else {
+            $stmt->bindParam(':value', $siteUrl);
+        }
+        $stmt->execute();
+    }
+    logMessage("wp_options table updated");
+}
+
+/**
+ * Function to get the latest error messages
+ *
+ * @param int $count Number of latest messages to retrieve
+ * @return array Array of error messages
+ */
+function getLatestErrors($count = 10) {
+    $logFile = 'D:/server/htdocs/Projects/wordpress/wordpress_error.log';
+    $lines = file($logFile);
+    $errors = array_slice(array_reverse($lines), 0, $count);
+    return array_reverse($errors);
 }
 ?>
