@@ -9,12 +9,13 @@
  * - Creating the wp-config.php configuration file
  *
  * Inputs:
- * - $_POST['site_name']: Name of the new site
+ * - $_POST['site_name']: Name of the new site (folder name)
  * - $_POST['database']: Name of the new database
  * - $_POST['explain_']: Site description
  *
  * Outputs:
  * - Success message with a link to the new WordPress admin panel, or an error message
+ * - Logs errors and important events to a log file
  *
  * Dependencies:
  * - PHP 7.0+
@@ -22,14 +23,27 @@
  * - MySQL/MariaDB
  *
  * @author Your Name
- * @version 1.0
+ * @version 1.1
  */
 
 // Set PHP settings for better performance and security
 ini_set('display_errors', 'Off');
 ini_set('log_errors', 'On');
-ini_set('error_log', 'D:/server/htdocs/error_log.txt');
+ini_set('error_log', 'D:/server/htdocs/wordpress_creator_error.log');
 ini_set('max_execution_time', 300);
+
+/**
+ * Function to log messages
+ *
+ * @param string $message The message to log
+ * @param string $type The type of log message (e.g., 'INFO', 'ERROR')
+ */
+function logMessage($message, $type = 'INFO') {
+    $logFile = 'D:/server/htdocs/wordpress_creator.log';
+    $timestamp = date('Y-m-d H:i:s');
+    $logEntry = "[$timestamp] [$type] $message" . PHP_EOL;
+    file_put_contents($logFile, $logEntry, FILE_APPEND);
+}
 
 /**
  * Function to write content to a file
@@ -41,7 +55,13 @@ ini_set('max_execution_time', 300);
 function writeToFile($file_path, $content)
 {
     $result = file_put_contents($file_path, $content);
-    return ($result !== false) ? "File written successfully." : "Error writing to file.";
+    if ($result !== false) {
+        logMessage("File written successfully: $file_path");
+        return "File written successfully.";
+    } else {
+        logMessage("Error writing to file: $file_path", 'ERROR');
+        return "Error writing to file.";
+    }
 }
 
 /**
@@ -69,6 +89,7 @@ function copyFolder($source, $destination)
         }
     }
     closedir($dir);
+    logMessage("Folder copied from $source to $destination");
 }
 
 /**
@@ -94,6 +115,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $database = $_POST["database"];
     $explain_ = $_POST["explain_"];
 
+    logMessage("Starting WordPress site creation for: $siteName");
+
     // 1. Copy files from source folder to destination folder
     $sourceFolder = 'D:/server/htdocs/Projects/Projects/wordpress/';
     $destinationFolder = 'D:/server/htdocs/Projects/wordpress/' . $siteName;
@@ -109,31 +132,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         $dbName = $database;
         $sql = "CREATE DATABASE IF NOT EXISTS `$dbName`";
         $pdo->exec($sql);
+        logMessage("Database created: $dbName");
 
         // Import the database
         $pdo->exec("USE `$dbName`");
         $sqlFile = 'D:/server/htdocs/Projects/Projects/wordpressx.sql';
         $sql = file_get_contents($sqlFile);
         $pdo->exec($sql);
+        logMessage("Database imported from: $sqlFile");
 
         // 3. Update wp_options table
         $siteUrl = "http://localhost/Projects/wordpress/" . $siteName;
         
         $updateQueries = [
-            "UPDATE wp_options SET option_value = :value WHERE option_id = 2",
-            "UPDATE wp_options SET option_value = :value WHERE option_id = 3",
-            "UPDATE wp_options SET option_value = :siteName WHERE option_id = 4"
+            "UPDATE wp_options SET option_value = :value WHERE option_name = 'siteurl'",
+            "UPDATE wp_options SET option_value = :value WHERE option_name = 'home'",
+            "UPDATE wp_options SET option_value = :siteName WHERE option_name = 'blogname'"
         ];
 
         foreach ($updateQueries as $query) {
             $stmt = $pdo->prepare($query);
-            if (strpos($query, 'option_id = 4') !== false) {
+            if (strpos($query, 'option_name = \'blogname\'') !== false) {
                 $stmt->bindParam(':siteName', $siteName);
             } else {
                 $stmt->bindParam(':value', $siteUrl);
             }
             $stmt->execute();
         }
+        logMessage("wp_options table updated");
 
         // Create wp-config.php file
         $configContent = "<?php
@@ -188,7 +214,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 /** Sets up WordPress vars and included files. */
 require_once ABSPATH . 'wp-settings.php';";
 
-        file_put_contents($destinationFolder . '/wp-config.php', $configContent);
+        $wpConfigPath = $destinationFolder . '/wp-config.php';
+        file_put_contents($wpConfigPath, $configContent);
+        logMessage("wp-config.php created: $wpConfigPath");
 
         // Add record to site_name table
         $stmt = $pdo->prepare("INSERT INTO site_name (site_name, database_, explain_, kind, path, url) VALUES (:siteName, :database, :explain_, 'wordpress', :path, :url)");
@@ -199,17 +227,22 @@ require_once ABSPATH . 'wp-settings.php';";
             ':path' => $destinationFolder,
             ':url' => $siteUrl
         ]);
+        logMessage("Record added to site_name table");
 
         echo "Site created successfully. <a href='$siteUrl/wp-admin' target='_blank'>Open admin panel</a>";
         echo "<br>Path: $destinationFolder";
         echo "<br>URL: $siteUrl";
+        logMessage("WordPress site creation completed successfully for: $siteName");
 
     } catch(PDOException $e) {
-        echo "Error creating site: " . $e->getMessage();
+        $errorMessage = "Error creating site: " . $e->getMessage();
+        echo $errorMessage;
+        logMessage($errorMessage, 'ERROR');
     }
 
     $pdo = null;
 } else {
     echo "Invalid request!";
+    logMessage("Invalid request received", 'WARNING');
 }
 ?>
